@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>wg-easy 连接故障排查指南</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .step-card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .step-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .code-block {
+            position: relative;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            background-color: #4A5568;
+            color: #E2E8F0;
+            border: none;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        .copy-btn:hover {
+            opacity: 1;
+        }
+        .copy-feedback {
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            background-color: #2F855A;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-10">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">wg-easy 客户端无法上网：排查指南</h1>
+            <p class="mt-4 text-lg text-gray-400">按照以下步骤，系统地诊断和解决您的 WireGuard 连接问题。</p>
+        </header>
+
+        <div class="space-y-8">
+            <!-- Step 1: 检查客户端连接状态 -->
+            <div class="bg-gray-800 rounded-xl shadow-lg p-6 step-card">
+                <div class="flex items-center mb-4">
+                    <div class="bg-blue-500 text-white rounded-full h-10 w-10 flex items-center justify-center font-bold text-xl mr-4">1</div>
+                    <h2 class="text-2xl font-semibold text-white">检查客户端连接状态</h2>
+                </div>
+                <p class="text-gray-400 mb-4">首先，确认客户端与 wg-easy 服务端的隧道是否已经成功建立。这是最基本的一步。</p>
+                <div class="prose prose-invert max-w-none">
+                    <p>在<strong>客户端设备</strong>上执行以下命令（如果您的客户端是 Windows/macOS，请检查 WireGuard 应用的图形界面）：</p>
+                    <div class="code-block bg-gray-900 rounded-lg p-4 my-4">
+                        <pre><code class="language-bash">wg show</code></pre>
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <div class="copy-feedback">已复制!</div>
+                    </div>
+                    <p class="font-semibold">预期结果:</p>
+                    <ul class="list-disc pl-6 text-gray-300">
+                        <li>您应该能看到 `latest handshake` (最近的握手) 时间在几分钟之内。</li>
+                        <li>`transfer` (传输) 数据量应该有发送 (tx) 和接收 (rx) 的字节。</li>
+                    </ul>
+                    <p class="mt-4">如果<strong>没有看到 `latest handshake`</strong> 或 `transfer` 中只有发送没有接收，说明客户端与服务端的底层连接有问题。请检查：</p>
+                    <ul class="list-disc pl-6 text-gray-400">
+                        <li>客户端配置文件中的 `Endpoint` 地址和端口是否正确。</li>
+                        <li>服务器的防火墙是否开放了 `WG_PORT` (默认 51820/UDP)。</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Step 2: 检查 IP 转发 -->
+            <div class="bg-gray-800 rounded-xl shadow-lg p-6 step-card">
+                <div class="flex items-center mb-4">
+                    <div class="bg-green-500 text-white rounded-full h-10 w-10 flex items-center justify-center font-bold text-xl mr-4">2</div>
+                    <h2 class="text-2xl font-semibold text-white">检查服务器 IP 转发</h2>
+                </div>
+                <p class="text-gray-400 mb-4">要让 VPN 客户端通过服务器访问互联网，服务器主机必须开启 IP 转发功能。这是最常见的问题原因。</p>
+                <div class="prose prose-invert max-w-none">
+                    <p>在<strong>运行 wg-easy 的服务器</strong>上执行以下命令：</p>
+                    <div class="code-block bg-gray-900 rounded-lg p-4 my-4">
+                        <pre><code class="language-bash">sysctl net.ipv4.ip_forward</code></pre>
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <div class="copy-feedback">已复制!</div>
+                    </div>
+                    <p class="font-semibold">预期结果:</p>
+                    <p>命令的输出应该是 `net.ipv4.ip_forward = 1`。</p>
+                    <p class="mt-4">如果输出是 `0`，说明 IP 转发未开启。请执行以下命令来临时开启它：</p>
+                    <div class="code-block bg-gray-900 rounded-lg p-4 my-4">
+                        <pre><code class="language-bash">sysctl -w net.ipv4.ip_forward=1</code></pre>
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <div class="copy-feedback">已复制!</div>
+                    </div>
+                    <p>要使其永久生效，请编辑 `/etc/sysctl.conf` 文件，取消注释或添加 `net.ipv4.ip_forward=1` 这一行，然后运行 `sysctl -p`。</p>
+                </div>
+            </div>
+            
+            <!-- Step 3: 检查服务器防火墙和 NAT 规则 -->
+            <div class="bg-gray-800 rounded-xl shadow-lg p-6 step-card">
+                <div class="flex items-center mb-4">
+                    <div class="bg-yellow-500 text-white rounded-full h-10 w-10 flex items-center justify-center font-bold text-xl mr-4">3</div>
+                    <h2 class="text-2xl font-semibold text-white">检查服务器防火墙和 NAT 规则</h2>
+                </div>
+                <p class="text-gray-400 mb-4">wg-easy 会自动添加 `iptables` 规则来实现 NAT (网络地址转换)，但可能被其他防火墙软件（如 `ufw`, `firewalld`）或自定义规则阻挡。</p>
+                 <div class="prose prose-invert max-w-none">
+                    <p>在<strong>服务器</strong>上，列出当前的 `iptables` NAT 规则：</p>
+                    <div class="code-block bg-gray-900 rounded-lg p-4 my-4">
+                        <pre><code class="language-bash">iptables -t nat -L POSTROUTING -v</code></pre>
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <div class="copy-feedback">已复制!</div>
+                    </div>
+                    <p class="font-semibold">预期结果:</p>
+                    <p>您应该能看到一条类似下面的规则，源地址是您的 WireGuard 子网 (默认为 10.8.0.0/24)，并且目标是 `MASQUERADE`。</p>
+                    <pre class="bg-gray-700 p-2 rounded-md text-sm"><code>Chain POSTROUTING (policy ACCEPT ...)
+target     prot opt in     out     source               destination
+MASQUERADE all  --  any    any     10.8.0.0/24          anywhere</code></pre>
+                    <p class="mt-4">如果没有看到此规则，请检查 `wg-easy` 的日志。如果规则存在，但依然无法上网，请检查防火墙的 `FORWARD` 链是否允许了相关流量：</p>
+                     <div class="code-block bg-gray-900 rounded-lg p-4 my-4">
+                        <pre><code class="language-bash">iptables -L FORWARD -v</code></pre>
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <div class="copy-feedback">已复制!</div>
+                    </div>
+                    <p>默认策略可能是 `DROP`。wg-easy 通常会添加规则来接受来自 wg0 接口的流量。如果这里有问题，可以尝试手动添加允许规则（eth0 是示例公网接口）：</p>
+                    <div class="code-block bg-gray-900 rounded-lg p-4 my-4">
+                        <pre><code class="language-bash">iptables -A FORWARD -i wg0 -o eth0 -j ACCEPT
+iptables -A FORWARD -i eth0 -o wg0 -m state --state RELATED,ESTABLISHED -j ACCEPT</code></pre>
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <div class="copy-feedback">已复制!</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: 检查 DNS 解析 -->
+            <div class="bg-gray-800 rounded-xl shadow-lg p-6 step-card">
+                <div class="flex items-center mb-4">
+                    <div class="bg-purple-500 text-white rounded-full h-10 w-10 flex items-center justify-center font-bold text-xl mr-4">4</div>
+                    <h2 class="text-2xl font-semibold text-white">检查 DNS 解析</h2>
+                </div>
+                <p class="text-gray-400 mb-4">如果可以 ping通 IP 地址（如 `8.8.8.8`），但无法访问域名（如 `google.com`），那么问题出在 DNS 上。</p>
+                <div class="prose prose-invert max-w-none">
+                    <p>在<strong>已连接VPN的客户端</strong>上，尝试 ping 一个 IP 地址和一个域名：</p>
+                    <div class="code-block bg-gray-900 rounded-lg p-4 my-4">
+                        <pre><code class="language-bash"># 首先 ping IP
+ping 8.8.8.8
+
+# 然后 ping 域名
+ping google.com</code></pre>
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <div class="copy-feedback">已复制!</div>
+                    </div>
+                     <p>如果 `ping 8.8.8.8` 成功，但 `ping google.com` 失败，说明 DNS 设置有问题。</p>
+                    <p class="font-semibold">解决方法:</p>
+                    <ul class="list-disc pl-6 text-gray-300">
+                        <li><strong>检查 wg-easy 配置</strong>: 在 `docker-compose.yml` 文件中，确保 `WG_DNS` 环境变量设置了一个或多个有效的 DNS 服务器，例如 `WG_DNS=1.1.1.1, 8.8.8.8`。修改后需要重启 `wg-easy` 容器。</li>
+                        <li><strong>检查客户端配置</strong>: 打开客户端的 WireGuard 配置文件 (`.conf`)，确认 `[Interface]` 部分有 `DNS = ...` 这一行，并且值是有效的。这个值是由 `WG_DNS` 自动生成的。</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Step 5: 查看 wg-easy 日志 -->
+            <div class="bg-gray-800 rounded-xl shadow-lg p-6 step-card">
+                <div class="flex items-center mb-4">
+                    <div class="bg-red-500 text-white rounded-full h-10 w-10 flex items-center justify-center font-bold text-xl mr-4">5</div>
+                    <h2 class="text-2xl font-semibold text-white">查看 wg-easy 日志</h2>
+                </div>
+                <p class="text-gray-400 mb-4">最后，wg-easy 容器的日志是发现问题的金钥匙，它会告诉你启动过程中是否有错误。</p>
+                <div class="prose prose-invert max-w-none">
+                    <p>在<strong>服务器</strong>上，找到你的 wg-easy 容器名称，然后查看它的日志。</p>
+                    <div class="code-block bg-gray-900 rounded-lg p-4 my-4">
+                        <pre><code class="language-bash"># 找到容器名称 (通常是 wg-easy)
+docker ps
+
+# 查看日志 (替换 'wg-easy' 为你的容器名)
+docker logs wg-easy</code></pre>
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <div class="copy-feedback">已复制!</div>
+                    </div>
+                    <p class="font-semibold">关注点:</p>
+                    <ul class="list-disc pl-6 text-gray-300">
+                        <li>寻找任何包含 `Error`, `Failed`, 或 `Permission denied` 的行。</li>
+                        <li>`Permission denied` 错误通常与 Docker 容器没有足够的权限修改网络设置有关。确保在 `docker-compose.yml` 中为 `wg-easy` 服务添加了 `cap_add: [NET_ADMIN, SYS_MODULE]` 和 `sysctls: net.ipv4.conf.all.src_valid_mark: 1`。</li>
+                        <li>检查日志中报告的 `iptables` 规则添加是否成功。</li>
+                    </ul>
+                </div>
+            </div>
+
+        </div>
+
+        <footer class="text-center mt-12 pb-4">
+            <p class="text-gray-500">如果所有步骤都检查无误，问题仍然存在，请考虑网络环境的特殊性，如云服务商的安全组策略、上游路由器的防火墙等。</p>
+        </footer>
+
+    </div>
+
+    <script>
+        function copyCode(button) {
+            const pre = button.parentElement.querySelector('pre');
+            const code = pre.innerText;
+            
+            // Use execCommand for broader browser support in iFrames
+            const textArea = document.createElement('textarea');
+            textArea.value = code;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                const feedback = button.nextElementSibling;
+                button.style.display = 'none';
+                feedback.style.opacity = '1';
+                setTimeout(() => {
+                    feedback.style.opacity = '0';
+                    button.style.display = 'block';
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+            }
+            document.body.removeChild(textArea);
+        }
+    </script>
+</body>
+</html>
